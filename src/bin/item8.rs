@@ -13,6 +13,7 @@ async fn main() -> Result<()> {
 
     let loop_count = Arc::new(AtomicUsize::new(0));
     let loop_count_clone = loop_count.clone();
+    let (tx, mut rx) = tokio::sync::oneshot::channel();
     let handle = tokio::task::spawn_blocking(move || loop {
         loop_count.fetch_add(1, Relaxed);
         let s: String = rand::thread_rng()
@@ -21,10 +22,13 @@ async fn main() -> Result<()> {
             .map(char::from)
             .collect();
         println!("{}", s);
+        if rx.try_recv().is_ok() {
+            break;
+        }
     });
     let result = fib(NUMBER);
-    handle.abort();
-
+    tx.send(()).unwrap();
+    handle.await?;
     println!(
         "Fibonacci number: {result}, loop_count: {}",
         loop_count_clone.load(Relaxed)
